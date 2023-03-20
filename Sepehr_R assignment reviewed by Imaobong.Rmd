@@ -1,0 +1,190 @@
+---
+title: "Sepehr_R assignment reviewed by Imaobong"
+output: html_document
+date: "2023-03-20"
+
+# Data inspection
+
+```{r}
+library(dplyr)
+#loading the files from depository
+
+
+fang <- read.table("fang_et_al_genotypes.txt"  , header = TRUE, sep = "\t")
+snp_position <- read.table("snp_position.txt", header = TRUE, sep = "\t")
+# do some inspections
+#size of files
+file_size_fang <- file.info("fang_et_al_genotypes.txt")$size
+file_size_snp <- file.info("snp_position.txt")$size
+print(file_size_fang  )
+print(file_size_snp  )
+#number of rows and columns
+num_rows_fang <- dim(fang)[1]
+num_cols_fang <- dim(fang)[2]
+num_rows_snp <- dim(snp_position)[1]
+num_cols_snp <- dim(snp_position)[2]
+#more inspections
+str(fang)
+str(snp_position)
+
+####(I ran all the script for fang and SNP data inspection and they look good. Other suggestions include: names() and unique(data$Chromosome) to know the name of each column and unique chromosome in file)
+
+## lets do the data processing
+```{r}
+#trimming snp file
+snp_3 <- snp_position [c(1,3,4)]
+#filter fang file for maize and teo
+maize <- filter(fang, Group %in% c( 'ZMMIL', 'ZMMLR', 'ZMMMR'))
+teo <- filter(fang, Group %in% c( 'ZMPBA',' ZMPIL',  'ZMPJA'))
+# transposing the maize and teo but clipping the first 3 rows beforehand
+maize <- maize[-c(1:3)]
+teo <- teo[-c(1:3)]
+t_maize <- t(maize)
+t_teo <- t(teo)
+#perform merging
+merged_maize <- merge( snp_3 , t_maize , by.x = "SNP_ID", by.y ="row.names" )
+merged_teo <- merge( snp_3 , t_teo , by.x = "SNP_ID", by.y ="row.names" )
+#now lets write for loops and write our desired files
+#first one is for maize file, increasing position and with ?/?
+
+for (i in 1:10) {
+  file <- filter(merged_maize, Chromosome %in% c(i))
+  file_sorted<- file [order(file$Position, decreasing = FALSE), ]
+  file_name <- paste("maize_a", i, ".txt", sep = "")
+  write.table(file_sorted, file = file_name, sep = "\t", quote = FALSE, row.names = FALSE)
+}
+  #second one is for maize file, decreasing position and with ?/?change to "-/-"
+for (i in 1:10) {
+  file <- filter(merged_maize, Chromosome %in% c(i))
+  file_sorted<- file [order(file$Position, decreasing = TRUE), ]
+  #change "?" to "-"
+file_sorted[file_sorted=="?/?"] <- "-/-"
+file_name <- paste("maize_b", i, ".txt", sep = "")
+write.table(file_sorted, file = file_name, sep = "\t", quote = FALSE, row.names = FALSE)
+}
+#same for teo
+for (i in 1:10) {
+  file <- filter(merged_teo, Chromosome %in% c(i))
+  file_sorted<- file [order(file$Position, decreasing = FALSE), ]
+file_name <- paste("teo_a", i, ".txt", sep = "")
+write.table(file_sorted, file = file_name, sep = "\t", quote = FALSE, row.names = FALSE)
+}
+for (i in 1:10) {
+  file <- filter(merged_teo, Chromosome %in% c(i))
+  file_sorted<- file [order(file$Position, decreasing = TRUE), ]
+  #change "?" to "-"
+file_sorted[file_sorted=="?/?"] <- "-/-"
+file_name <- paste("teo_b", i, ".txt", sep = "")
+write.table(file_sorted, file = file_name, sep = "\t", quote = FALSE, row.names = FALSE)
+}
+
+```
+##All code for your data processing ran well.I would suggest making them more organized by creating a separate folder "dir.create('./name')" for each each decreasing and increasing order for maize and teosinte.
+
+# Data visualization
+```{r, echo=FALSE, fig.show="hold"}
+library(ggplot2)
+library(tidyverse)
+#lets look at the snp's position on each chromosomes
+ggplot(data = merged_maize, aes(x=Position, y=Chromosome)) + 
+  geom_point(color = "blue") +
+  labs(title = "Maize Data", x = "Position", y = "Chromosome")
+
+ggplot(data = merged_teo, aes(x=Position, y=Chromosome)) + 
+  geom_point(color = "red") +
+  labs(title = "Teosinte Data", x = "Position", y = "Chromosome")
+#lets see total SNPs in each chromosome in Maize file
+ggplot (data = merged_maize) + geom_bar(mapping = aes(x = Chromosome, fill = Chromosome)) +xlab(label = "Chromosome") + ylab(label = "SNPs") + ggtitle("SNPs per Chromosome in Maize") + scale_x_discrete(limit=c(1:10, "unknown", "multiple"))
+#and for teo
+ggplot (data = merged_teo) + geom_bar(mapping = aes(x = Chromosome, fill = Chromosome)) +xlab(label = "Chromosome") + ylab(label = "SNPs") + ggtitle("SNPs per Chromosome in Maize") + scale_x_discrete(limit=c(1:10, "unknown", "multiple"))
+
+```
+
+# lets make some columns with gomoginety and missed data rates in our maize and teo files
+
+```{r, echo=FALSE, fig.show="hold"}
+homogenety <- numeric(nrow(merged_maize))
+missing_data <- numeric(nrow(merged_maize))
+
+# Loop through each row of the Maize data frame
+for (i in 1:nrow(merged_maize)) {
+  # Extract the row for each data as a vector
+  row_i <- as.vector(merged_maize[i,])
+  
+  # Count the number of strings in the row that match any string in c("A/A", "C/C", "G/G", "T/T")
+  count_i <- sum(row_i %in% c("A/A", "C/C", "G/G", "T/T"))
+  
+  # Store the result in the results vector
+  homogenety[i] <- (count_i/(ncol(merged_maize)-3))
+  
+  #for missing data
+  
+  count_mi <- sum(row_i %in% "?/?")
+  
+  # Store the result in the results vector and norm
+  missing_data[i] <- (count_mi/(ncol(merged_maize)-3))
+}
+plot(homogenety, pch = 19, xlab = "SNP_ID_number", ylab = "homogenety rate", main = "Scatter plot of homoginety in Maize")
+new_merged_maize <- cbind(merged_maize[,1], homogenety,missing_data, merged_maize[,2:ncol(merged_maize)])
+
+# Set the name of the new column to the name of the vector
+names(new_merged_maize)[1] <- "SNP_ID"
+names(new_merged_maize)[2] <- "homogenety"
+names(new_merged_maize)[3] <- "missing_data"
+
+#lets make the same new_merged_teo for teo
+  homogenety_teo <- numeric(nrow(merged_teo))
+missing_data_teo <- numeric(nrow(merged_teo))
+
+# Loop through each row of the teo data frame
+for (i in 1:nrow(merged_teo)) {
+  # Extract the row for each data as a vector
+  row_i <- as.vector(merged_teo[i,])
+  
+  # Count the number of strings in the row that match any string in c("A/A", "C/C", "G/G", "T/T")
+  count_i <- sum(row_i %in% c("A/A", "C/C", "G/G", "T/T"))
+  
+  # Store the result in the results vector
+  homogenety_teo[i] <- (count_i/(ncol(merged_teo)-3))
+  
+  #for missing data
+  
+  count_mi <- sum(row_i %in% "?/?")
+  
+  # Store the result in the results vector and norm
+  missing_data_teo[i] <- (count_mi/(ncol(merged_teo)-3))
+}
+plot(homogenety, pch = 19, xlab = "SNP_ID_number", ylab = "homogenety rate", main = "Scatter plot of homoginety in teo")
+new_merged_teo <- cbind(merged_teo[,1], homogenety,missing_data, merged_teo[,2:ncol(merged_teo)])
+
+# Set the name of the new column to the name of the vector
+names(new_merged_teo)[1] <- "SNP_ID"
+names(new_merged_teo)[2] <- "homogenety"
+names(new_merged_teo)[3] <- "missing_data"
+
+#now we have 2 files: new_merged_teo and new_merged_maize and the 2md and 3rd colimn are added as homo and missed
+```
+# my visualization for homogenety and missed data 
+``` {r, echo=FALSE, fig.show="hold"}
+
+# Bin the data into 100 categories with 0.01 intervals
+new_merged_maize$my_bins <- cut(new_merged_maize$homogenety, breaks = seq(0, 1, by = 0.01))
+
+# Create the bar plot
+ggplot(new_merged_maize, aes(x = my_bins, fill = my_bins)) +
+  geom_bar() +
+  labs(title = "My Bar Plot for maize homogenety distribution", x = "Bins", y = "Count") +
+  theme_minimal()
+
+# do that for teo too
+# Bin the data into 100 categories with 0.01 intervals
+new_merged_teo$my_bins <- cut(new_merged_teo$homogenety, breaks = seq(0, 1, by = 0.01))
+
+# Create the bar plot
+ggplot(new_merged_teo, aes(x = my_bins, fill = my_bins)) +
+  geom_bar() +
+  labs(title = "My Bar Plot for maize homogenety distribution", x = "Bins", y = "Count") +
+  theme_minimal()
+
+###I was not able to view all the plotted graphs apart from the "SNPS per Chromosome in Maize".Also remember to make all your graphs in pdf format. I wish you the best.
+```
