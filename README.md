@@ -1,4 +1,8 @@
 # README: R_ Assignment repository contains the following:
+
+
+
+
 Four folders containing 10 files of increasing and decreasing order of each chromosome for maze and teosinte 
 A folder containing all visulaized ploted graphs in pdf format
 An R-MD file for Beatriz assignment with review from me
