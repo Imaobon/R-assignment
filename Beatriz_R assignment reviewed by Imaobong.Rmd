@@ -1,0 +1,494 @@
+---
+title: "Beatriz_R assignment reviewed by Imaobong"
+output: html_document
+date: "2023-03-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## (I did installed these packages before loading them, and they all ran well)
+# Load necessary libraries
+```{r}
+library(dplyr)
+library(tidyverse)
+library(reshape2)
+library(naniar)
+library(ggplot2)
+```
+
+# Load your data: 
+## gang_et_al_genotypes
+```{r}
+fang <- read_tsv("https://github.com/EEOB-BioData/BCB546_Spring2023/raw/main/assignments/UNIX_Assignment/fang_et_al_genotypes.txt")
+```
+
+## snp_position   
+```{r}
+snp <- read_tsv("https://github.com/EEOB-BioData/BCB546_Spring2023/raw/main/assignments/UNIX_Assignment/snp_position.txt")
+```
+## comments for data inspection---(I ran all the script for fang data inspection and they look good. Other suggestions include: object.size(snp), names(snp), $ unique(fang$Chromosome) to know the file size, name of each column and unique chromosome in file)
+# --- Part 1a, Data inspection ---
+## gang
+```{r}
+typeof(fang)
+### fang is a "list", which is multiple, heterogeneous, vectors with 1 element each. 
+```
+ 
+```{r}
+length(fang)
+### There are 986 elements
+```
+
+```{r}
+dim(fang)
+### there are 2,782 rows, and 986 columns 
+```
+
+```{r}
+str(fang)
+### this is a "data.frame", with 2,782 observations and 986 variables. Variable titles are as follows: Sample_ID, JG_OTU, Group, and the listed genotypes. 
+```
+
+```{r}
+sapply(fang, class)
+### every column has class: "character" 
+```
+
+```{r}
+table(fang$Group)
+### We will be filtering out desired Groups, so it's good to know how many of each there are, so we can look back and verify we haven't lost data. 
+```
+## (Same comment as the fang data)
+## snp
+```{r}
+typeof(snp)
+### snp is a "list", which is multiple, heterogeneous, vectors with 1 element each.
+```
+
+```{r}
+length(snp)
+### there are 15 elements.
+```
+
+```{r}
+dim(snp)
+### there are 983 rows, and 15 columns.
+```
+
+```{r}
+str(snp)
+### The variables in this file include details about the SNP_ID itself - beggining with SNP_ID, and ending with count_gene.
+```
+
+```{r}
+sapply(snp, class)
+### unlike gang, snp has a mixture of characters and integers. 
+```
+
+## comments for Data processing-- (A little bit confusing as your newly created files are having the same file name as old files.It will be nice if you have a different name to new files, but all did run well)
+# --- Part 1b,Data Processing ---
+## pull out your desired groups for Maize and Teosinte.
+```{r}
+Subsetted_Maize <- filter(fang, Group %in% c("ZMMIL","ZMMLR","ZMMMR"))
+```
+```{r}
+Subsetted_Teosinte <- filter(fang, Group %in% c("ZMPBA","ZMPIL","ZMPJA"))
+```
+
+## Checking that you have the right data: 
+```{r}
+table(Subsetted_Maize$Group)
+table(Subsetted_Teosinte$Group)
+### Results match what is in our original file (fang). 
+```
+
+## Remove columns that we do not need, including "JG_OTU" and "Group": 
+```{r}
+Subsetted_Maize <- Subsetted_Maize[,!names(Subsetted_Maize) %in% c("JG_OTU", "Group")]
+```
+```{r}
+Subsetted_Teosinte <- Subsetted_Teosinte[,!names(Subsetted_Teosinte) %in% c("JG_OTU", "Group")]
+```
+
+## Change Sample_ID to SNP_ID (first column)
+```{r}
+colnames(Subsetted_Maize) [1] <- "SNP_ID"
+```
+```{r}
+colnames(Subsetted_Teosinte) [1] <- "SNP_ID"
+```
+
+## Transpose the genotype data so that the columns become rows
+```{r}
+Subsetted_Maize <- t(Subsetted_Maize)
+```
+```{r}
+Subsetted_Teosinte <- t(Subsetted_Teosinte)
+### This should be clearly visible if you take a look at the file.
+```
+ 
+
+## Before joining, we only want the first 3 columns of the snp file. Additionally, the snp file should become a tibble for further processing:
+```{r}
+snp_ready <- snp[ , c("SNP_ID", "Chromosome","Position")]       
+snp_ready <- tibble::as_tibble(snp_ready)
+```
+
+## Now, to join the snp_ready file with the modified + transposed genotype files:
+```{r}
+snp_maize <- merge(snp_ready, Subsetted_Maize, by.x = "SNP_ID", by.y = "row.names")
+```
+```{r}
+snp_teosinte <- merge(snp_ready, Subsetted_Teosinte, by.x = "SNP_ID", by.y = "row.names")
+```
+
+## both should be tibbles for upcoming processing by dplyr:
+```{r}
+snp_maize <- tibble::as_tibble(snp_maize)
+snp_teosinte <- tibble::as_tibble(snp_teosinte)
+```
+
+##Comments on chromosome order----Maybe you could make fewer codes instead of the long codes you have. Like eg of mine below.
+You could first create a folder where all the files would be saved using this code "dir.create('./decreased_maize_file')". 
+then this codes for decreasing position----  "demis_maize <- as_tibble(lapply(merged_maize, gsub, pattern = "?", replacement = "-", fixed = TRUE))
+demaize_chromo <- filter(demis_maize, Chromosome != "unknown" & Chromosome != "multiple") 
+for (i in 1:length(unique(demaize_chromo$Chromosome))) {
+de_maizechro <- demaize_chromo %>% filter(Chromosome == i) %>% arrange(desc(Position)) 
+ write.table(de_maizechro, file =
+paste("./decreased_maize/decreasing_maize",i), quote = F, sep = "\t")
+}"
+# Maize 20 files - Processing: 
+## 10 files, ordered by increasing Position, with missing data encoded with "?":
+```{r}
+Chromosome1 <- filter(snp_maize, Chromosome %in% c("1"))
+Chromosome1 <- Chromosome1 [order(as.numeric(as.character(Chromosome1$Position))),]
+Chromosome1[Chromosome1=="?/?"] <- "?"
+Chromosome2 <- filter(snp_maize, Chromosome %in% c("2"))
+Chromosome2 <- Chromosome2 [order(as.numeric(as.character(Chromosome2$Position))),]
+Chromosome2[Chromosome2=="?/?"] <- "?"
+Chromosome3 <- filter(snp_maize, Chromosome %in% c("3"))
+Chromosome3 <- Chromosome3 [order(as.numeric(as.character(Chromosome3$Position))),]
+Chromosome3[Chromosome3=="?/?"] <- "?"
+Chromosome4 <- filter(snp_maize, Chromosome %in% c("4"))
+Chromosome4 <- Chromosome4 [order(as.numeric(as.character(Chromosome4$Position))),]
+Chromosome4[Chromosome4=="?/?"] <- "?"
+Chromosome5 <- filter(snp_maize, Chromosome %in% c("5"))
+Chromosome5 <- Chromosome5 [order(as.numeric(as.character(Chromosome5$Position))),]
+Chromosome5[Chromosome5=="?/?"] <- "?"
+Chromosome6 <- filter(snp_maize, Chromosome %in% c("6"))
+Chromosome6 <- Chromosome6 [order(as.numeric(as.character(Chromosome6$Position))),]
+Chromosome6[Chromosome6=="?/?"] <- "?"
+Chromosome7 <- filter(snp_maize, Chromosome %in% c("7"))
+Chromosome7 <- Chromosome7 [order(as.numeric(as.character(Chromosome7$Position))),]
+Chromosome7[Chromosome7=="?/?"] <- "?"
+Chromosome8 <- filter(snp_maize, Chromosome %in% c("8"))
+Chromosome8 <- Chromosome8 [order(as.numeric(as.character(Chromosome8$Position))),]
+Chromosome8[Chromosome8=="?/?"] <- "?"
+Chromosome9 <- filter(snp_maize, Chromosome %in% c("9"))
+Chromosome9 <- Chromosome9 [order(as.numeric(as.character(Chromosome9$Position))),]
+Chromosome9[Chromosome9=="?/?"] <- "?"
+Chromosome10 <- filter(snp_maize, Chromosome %in% c("10"))
+Chromosome10 <- Chromosome10 [order(as.numeric(as.character(Chromosome10$Position))),]
+Chromosome10[Chromosome10=="?/?"] <- "?"
+```
+
+## Make a new folder, and write .txt files:
+```{r}
+dir.create("Increasing_Maize")
+write.table(Chromosome1, file = "Chromosome1_mai.txt")
+write.table(Chromosome2, file = "Chromosome2_mai.txt")
+write.table(Chromosome3, file = "Chromosome3_mai.txt")
+write.table(Chromosome4, file = "Chromosome4_mai.txt")
+write.table(Chromosome5, file = "Chromosome5_mai.txt")
+write.table(Chromosome6, file = "Chromosome6_mai.txt")
+write.table(Chromosome7, file = "Chromosome7_mai.txt")
+write.table(Chromosome8, file = "Chromosome8_mai.txt")
+write.table(Chromosome9, file = "Chromosome9_mai.txt")
+write.table(Chromosome10, file = "Chromosome10_mai.txt")
+
+### You can move files into folders in the "Files" tab (bottom right), by selecting all the desired files, hitting the "settings" (the actual blue logo) down arrow, and selecting "move...". 
+```
+
+## 10 files, ordered by decreasing Position, with missing data encoded with "-":
+```{r}
+Chromosome1 <- filter(snp_maize, Chromosome %in% c("1"))
+Chromosome1 <- Chromosome1 [order(-as.numeric(as.character(Chromosome1$Position))),]
+Chromosome1[Chromosome1=="?/?"] <- "-"
+Chromosome2 <- filter(snp_maize, Chromosome %in% c("2"))
+Chromosome2 <- Chromosome2 [order(-as.numeric(as.character(Chromosome2$Position))),]
+Chromosome2[Chromosome2=="?/?"] <- "-"
+Chromosome3 <- filter(snp_maize, Chromosome %in% c("3"))
+Chromosome3 <- Chromosome3 [order(-as.numeric(as.character(Chromosome3$Position))),]
+Chromosome3[Chromosome3=="?/?"] <- "-"
+Chromosome4 <- filter(snp_maize, Chromosome %in% c("4"))
+Chromosome4 <- Chromosome4 [order(-as.numeric(as.character(Chromosome4$Position))),]
+Chromosome4[Chromosome4=="?/?"] <- "-"
+Chromosome5 <- filter(snp_maize, Chromosome %in% c("5"))
+Chromosome5 <- Chromosome5 [order(-as.numeric(as.character(Chromosome5$Position))),]
+Chromosome5[Chromosome5=="?/?"] <- "-"
+Chromosome6 <- filter(snp_maize, Chromosome %in% c("6"))
+Chromosome6 <- Chromosome6 [order(-as.numeric(as.character(Chromosome6$Position))),]
+Chromosome6[Chromosome6=="?/?"] <- "-"
+Chromosome7 <- filter(snp_maize, Chromosome %in% c("7"))
+Chromosome7 <- Chromosome7 [order(-as.numeric(as.character(Chromosome7$Position))),]
+Chromosome7[Chromosome7=="?/?"] <- "-"
+Chromosome8 <- filter(snp_maize, Chromosome %in% c("8"))
+Chromosome8 <- Chromosome8 [order(-as.numeric(as.character(Chromosome8$Position))),]
+Chromosome8[Chromosome8=="?/?"] <- "-"
+Chromosome9 <- filter(snp_maize, Chromosome %in% c("9"))
+Chromosome9 <- Chromosome9 [order(-as.numeric(as.character(Chromosome9$Position))),]
+Chromosome9[Chromosome9=="?/?"] <- "-"
+Chromosome10 <- filter(snp_maize, Chromosome %in% c("10"))
+Chromosome10 <- Chromosome10 [order(-as.numeric(as.character(Chromosome10$Position))),]
+Chromosome10[Chromosome10=="?/?"] <- "-"
+```
+
+## Make a new folder, and write .txt files:
+```{r}
+dir.create("Decreasing_Maize")
+write.table(Chromosome1, file = "Chromosome_decrease1_mai.txt")
+write.table(Chromosome2, file = "Chromosome_decrease2_mai.txt")
+write.table(Chromosome3, file = "Chromosome_decrease3_mai.txt")
+write.table(Chromosome4, file = "Chromosome_decrease4_mai.txt")
+write.table(Chromosome5, file = "Chromosome_decrease5_mai.txt")
+write.table(Chromosome6, file = "Chromosome_decrease6_mai.txt")
+write.table(Chromosome7, file = "Chromosome_decrease7_mai.txt")
+write.table(Chromosome8, file = "Chromosome_decrease8_mai.txt")
+write.table(Chromosome9, file = "Chromosome_decrease9_mai.txt")
+write.table(Chromosome10, file = "Chromosome_decrease10_mai.txt")
+```
+
+# Teosinte 20 files: 
+## 10 files, ordered by increasing Position, with missing data encoded with "?":
+```{r}
+Chromosome1 <- filter(snp_teosinte, Chromosome %in% c("1"))
+Chromosome1 <- Chromosome1 [order(as.numeric(as.character(Chromosome1$Position))),]
+Chromosome1[Chromosome1=="?/?"] <- "?"
+Chromosome2 <- filter(snp_teosinte, Chromosome %in% c("2"))
+Chromosome2 <- Chromosome2 [order(as.numeric(as.character(Chromosome2$Position))),]
+Chromosome2[Chromosome2=="?/?"] <- "?"
+Chromosome3 <- filter(snp_teosinte, Chromosome %in% c("3"))
+Chromosome3 <- Chromosome3 [order(as.numeric(as.character(Chromosome3$Position))),]
+Chromosome3[Chromosome3=="?/?"] <- "?"
+Chromosome4 <- filter(snp_teosinte, Chromosome %in% c("4"))
+Chromosome4 <- Chromosome4 [order(as.numeric(as.character(Chromosome4$Position))),]
+Chromosome4[Chromosome4=="?/?"] <- "?"
+Chromosome5 <- filter(snp_teosinte, Chromosome %in% c("5"))
+Chromosome5 <- Chromosome5 [order(as.numeric(as.character(Chromosome5$Position))),]
+Chromosome5[Chromosome5=="?/?"] <- "?"
+Chromosome6 <- filter(snp_teosinte, Chromosome %in% c("6"))
+Chromosome6 <- Chromosome6 [order(as.numeric(as.character(Chromosome6$Position))),]
+Chromosome6[Chromosome6=="?/?"] <- "?"
+Chromosome7 <- filter(snp_teosinte, Chromosome %in% c("7"))
+Chromosome7 <- Chromosome7 [order(as.numeric(as.character(Chromosome7$Position))),]
+Chromosome7[Chromosome7=="?/?"] <- "?"
+Chromosome8 <- filter(snp_teosinte, Chromosome %in% c("8"))
+Chromosome8 <- Chromosome8 [order(as.numeric(as.character(Chromosome8$Position))),]
+Chromosome8[Chromosome8=="?/?"] <- "?"
+Chromosome9 <- filter(snp_teosinte, Chromosome %in% c("9"))
+Chromosome9 <- Chromosome9 [order(as.numeric(as.character(Chromosome9$Position))),]
+Chromosome9[Chromosome9=="?/?"] <- "?"
+Chromosome10 <- filter(snp_teosinte, Chromosome %in% c("10"))
+Chromosome10 <- Chromosome10 [order(as.numeric(as.character(Chromosome10$Position))),]
+Chromosome10[Chromosome10=="?/?"] <- "?"        
+```
+
+## Make a new folder, and write .txt files:
+```{r}
+dir.create("Increasing_Teosinte")
+write.table(Chromosome1, file = "Chromosome1_teo")
+write.table(Chromosome2, file = "Chromosome2_teo")
+write.table(Chromosome3, file = "Chromosome3_teo")
+write.table(Chromosome4, file = "Chromosome4_teo")
+write.table(Chromosome5, file = "Chromosome5_teo")
+write.table(Chromosome6, file = "Chromosome6_teo")
+write.table(Chromosome7, file = "Chromosome7_teo")
+write.table(Chromosome8, file = "Chromosome8_teo")
+write.table(Chromosome9, file = "Chromosome9_teo")
+write.table(Chromosome10, file = "Chromosome10_teo")
+```
+
+## 10 files, ordered by decreasing Position, with missing data encoded with "-":
+```{r}
+Chromosome1 <- filter(snp_teosinte, Chromosome %in% c("1"))
+Chromosome1 <- Chromosome1 [order(-as.numeric(as.character(Chromosome1$Position))),]
+Chromosome1[Chromosome1=="?/?"] <- "-"
+Chromosome2 <- filter(snp_teosinte, Chromosome %in% c("2"))
+Chromosome2 <- Chromosome2 [order(-as.numeric(as.character(Chromosome2$Position))),]
+Chromosome2[Chromosome2=="?/?"] <- "-"
+Chromosome3 <- filter(snp_teosinte, Chromosome %in% c("3"))
+Chromosome3 <- Chromosome3 [order(-as.numeric(as.character(Chromosome3$Position))),]
+Chromosome3[Chromosome3=="?/?"] <- "-"
+Chromosome4 <- filter(snp_teosinte, Chromosome %in% c("4"))
+Chromosome4 <- Chromosome4 [order(-as.numeric(as.character(Chromosome4$Position))),]
+Chromosome4[Chromosome4=="?/?"] <- "-"
+Chromosome5 <- filter(snp_teosinte, Chromosome %in% c("5"))
+Chromosome5 <- Chromosome5 [order(-as.numeric(as.character(Chromosome5$Position))),]
+Chromosome5[Chromosome5=="?/?"] <- "-"
+Chromosome6 <- filter(snp_teosinte, Chromosome %in% c("6"))
+Chromosome6 <- Chromosome6 [order(-as.numeric(as.character(Chromosome6$Position))),]
+Chromosome6[Chromosome6=="?/?"] <- "-"
+Chromosome7 <- filter(snp_teosinte, Chromosome %in% c("7"))
+Chromosome7 <- Chromosome7 [order(-as.numeric(as.character(Chromosome7$Position))),]
+Chromosome7[Chromosome7=="?/?"] <- "-"
+Chromosome8 <- filter(snp_teosinte, Chromosome %in% c("8"))
+Chromosome8 <- Chromosome8 [order(-as.numeric(as.character(Chromosome8$Position))),]
+Chromosome8[Chromosome8=="?/?"] <- "-"
+Chromosome9 <- filter(snp_teosinte, Chromosome %in% c("9"))
+Chromosome9 <- Chromosome9 [order(-as.numeric(as.character(Chromosome9$Position))),]
+Chromosome9[Chromosome9=="?/?"] <- "-"
+Chromosome10 <- filter(snp_teosinte, Chromosome %in% c("10"))
+Chromosome10 <- Chromosome10 [order(-as.numeric(as.character(Chromosome10$Position))),]
+Chromosome10[Chromosome10=="?/?"] <- "-"
+```
+
+## Make a new folder, and write .txt files:
+```{r}
+dir.create("Decreasing_Teosinte")
+write.table(Chromosome1, file = "Chromosome1_decrease_teo")
+write.table(Chromosome2, file = "Chromosome2_decrease_teo")
+write.table(Chromosome3, file = "Chromosome3_decrease_teo")
+write.table(Chromosome4, file = "Chromosome4_decrease_teo")
+write.table(Chromosome5, file = "Chromosome5_decrease_teo")
+write.table(Chromosome6, file = "Chromosome6_decrease_teo")
+write.table(Chromosome7, file = "Chromosome7_decrease_teo")
+write.table(Chromosome8, file = "Chromosome8_decrease_teo")
+write.table(Chromosome9, file = "Chromosome9_decrease_teo")
+write.table(Chromosome10, file = "Chromosome10_decrease_teo")
+```
+## comment on data visulaization----(Chromosome legend on the right side of your graph is not in the right order.. you could try this "as.factor(as.double(Chromosome)" to have them ordered correctly)
+# --- Part 2: Visualization ---
+## Distribution of SNPs on each chromosome & across (Maize and Teosinte combined): 
+```{r}
+### prep
+Subsetted_Vis <- filter(fang, Group %in% c("ZMMIL","ZMMLR","ZMMMR","ZMPBA","ZMPIL","ZMPJA"))
+Subsetted_Vis <- Subsetted_Vis[,!names(Subsetted_Vis) %in% "JG_OTU"]
+colnames(Subsetted_Vis) [1] <- "SNP_ID"
+Subsetted_Vis <- t(Subsetted_Vis)
+snp_sub_vis <- merge(snp_ready, Subsetted_Vis, by.x = "SNP_ID", by.y = "row.names", all = TRUE)
+snp_sub_vis %>% naniar::replace_with_na_all(condition = ~.x == "?/?")
+snp_sub_vis <- snp_sub_vis %>% pivot_longer(starts_with("V"),
+                             names_to='geno',
+                             values_to='SNP')
+### plot
+ggplot (data = snp_sub_vis) + geom_bar(mapping = aes(x = Chromosome, fill = Chromosome)) +xlab(label = "Chromosome") + ylab(label = "SNPs") + ggtitle("Single Nucleotide Polymorphism per Chromosome") + scale_x_discrete(limit=c(1:10))
+
+### Chromosome 1 has the most SNPs, while chromosome 10 appears to have the least. 
+```
+
+## Distribution of SNPs on each chromosome & across (Maize vs. Teosinte)
+```{r}
+### prep
+fang_new <- fang[,!names(fang) %in% "JG_OTU"]
+fang_new <- fang_new %>% pivot_longer(!c(Sample_ID, Group), names_to="SNP_ID", values_to= "allele")
+Subsetted_Vis_2 <- filter(fang_new, Group %in% c("ZMMIL","ZMMLR","ZMMMR","ZMPBA","ZMPIL","ZMPJA"))
+snp_vis_2 <- merge(Subsetted_Vis_2, snp_ready, by="SNP_ID")
+snp_vis_2 <- tibble::as_tibble(snp_vis_2)
+Subsetted_SNPs <- snp_vis_2 %>% 
+  mutate(
+    type = if_else(
+      condition = Group %in% c("ZMMIL","ZMMLR","ZMMMR"), 
+      true      = "Maize", 
+      false     = "Teosinte"
+    ), 
+  )
+### graph 1
+by_group_plot <- ggplot (data = Subsetted_SNPs) + geom_bar(mapping = aes(x = Chromosome, fill = type)) + 
+xlab(label = "Chromosome") + ylab(label = "SNPs") +
+  ggtitle("Single Nucleotide Polymorphism per Sample") 
+by_group_plot
+
+### graph 2
+by_group_plot + facet_grid(Group ~ .)
+
+### The group with the highest SNPs is the ZMMLR, belonging to Maize. Teosinte has an overall lower SNP count. 
+```
+
+## homozygous vs. heterozygous:
+```{r}
+### Labeling homozygous and heterozygous as TRUE (homozygous) or FALSE (heterozygous):
+snp_vis_2_snp <- merge(Subsetted_Vis_2, snp_ready, by="SNP_ID")
+snp_vis_2_snp <- tibble::as_tibble(snp_vis_2_snp)
+snp_vis_2_snp <- snp_vis_2_snp %>% replace_with_na(replace = list(allele = "?/?"))
+snp_vis_2_snp <- snp_vis_2_snp %>% 
+  mutate(
+    homozygosity = if_else(
+      condition = allele %in% c("A/A","T/T","G/G","C/C"), 
+      true      = "homozygous", 
+      false     = "heterozygous"
+    ), 
+  )
+snp_vis_2_snp <- snp_vis_2_snp %>% 
+  mutate(
+    type = if_else(
+      condition = Group %in% c("ZMMIL","ZMMLR","ZMMMR","C/C"), 
+      true      = "Maize", 
+      false     = "Teosinte"
+    ), 
+  )
+snp_vis_2_snp_na_omit <- na.omit(snp_vis_2_snp) 
+### plot het vs. hom in each group
+ggplot(data = snp_vis_2_snp_na_omit) + 
+  geom_bar(mapping = aes(x = homozygosity, fill = Group)) + 
+  xlab(label = "Homozygous vs. Heterozygous") + ylab(label = "Count") +
+  ggtitle("Homozygous vs. Heterozygous by Group & Sample") + facet_grid(type ~ .) 
+
+ggplot(data = snp_vis_2_snp_na_omit) + 
+  geom_bar(mapping = aes(x = Group, fill = homozygosity)) + 
+  xlab(label = "Homozygous vs. Heterozygous") + ylab(label = "Count") +
+  ggtitle("Homozygous vs. Heterozygous by Group") 
+
+ggplot(data = snp_vis_2_snp_na_omit) + 
+  geom_bar(mapping = aes(x = type, fill = homozygosity)) + 
+  xlab(label = "Homozygous vs. Heterozygous") + ylab(label = "Count") +
+  ggtitle("Homozygous vs. Heterozygous in Maize + Teosinte")
+
+### There is a close amount of heterozygosity in both samples, but we need to keep in mind that the Teosinte sample has a lower number of SNPs overall, and therefore, in my opinion, a conclusion cannot be drawn from this data. 
+```
+
+## NA data: 
+```{r}
+r_is_hard <- snp_vis_2_snp %>% 
+  mutate(
+    missing_data = if_else(
+      condition = allele %in% NA, 
+      true      = "missing", 
+      false     = "not missing"
+    ), 
+  )
+
+ggplot(data = r_is_hard) + 
+  geom_bar(mapping = aes(x = missing_data, fill = Group)) + 
+  xlab(label = "Missing or Not") + ylab(label = "Count") +
+  ggtitle("Missing Data in Maize + Teosinte") + facet_grid(type ~ .)
+
+ggplot(data = r_is_hard) +
+  geom_bar(mapping = aes(x = type, fill = missing_data)) + 
+  xlab(label = "Sample") + ylab(label = "Count") +
+  ggtitle("Missing Data in Maize + Teosinte")
+
+### Lots missing from Teosinte
+```
+
+## Creative portion of assignment (additional graph):
+```{r}
+### Number amplicons in samples
+snp_ready_2 <- snp[ , c("SNP_ID", "Chromosome","Position","count_amplicons")]       
+snp_ready_2 <- tibble::as_tibble(snp_ready_2)
+snp_vis_2_new <- merge(Subsetted_Vis_2, snp_ready_2, by="SNP_ID")
+snp_vis_2_new <- tibble::as_tibble(snp_vis_2_new)
+Subsetted_SNPs_new <- snp_vis_2_new %>% 
+  mutate(
+    type = if_else(
+      condition = Group %in% c("ZMMIL","ZMMLR","ZMMMR"), 
+      true      = "Maize", 
+      false     = "Teosinte"
+    ), 
+  )
+
+ggplot(Subsetted_SNPs_new) + geom_col(aes(x = type, y = count_amplicons)) + xlab(label = "Sample") + ylab(label = "Number of Amplicons") + ggtitle("Amplicons per Sample")
+
+### This difference in number of amplicons suggests that something went wrong during PCR, or a different step in the procedure with the Teosinte sample. 
+```
+Great job... I wish you the best!
