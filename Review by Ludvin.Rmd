@@ -1,0 +1,14 @@
+
+title: "Review by Ludvin"
+output: html_document
+date: "2023-03-17"
+---
+
+When I ran all the code everything ran smoothly and I didn't encounter any real errors.
+
+I think your work flow makes sense and you get the files that are needed. I think using the merge command is nice and saves some line of code. 
+
+I did run into some trouble when I ran some of your visualization code. 
+Lines 226-228. I think the output got changed and I'm not able to visualize the code. 
+
+I think you did a great job and I don't have much to say. If you get the visualization portion figured out I'll be happy to look at it!
